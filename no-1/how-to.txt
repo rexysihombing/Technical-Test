@@ -1,0 +1,11 @@
+# Run file terraform
+
+terraform init
+
+terraform plan
+
+terraform apply
+
+# Destroy
+
+terraform Destroy
