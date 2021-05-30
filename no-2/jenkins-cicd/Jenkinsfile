@@ -1,0 +1,42 @@
+pipeline {
+    environment {
+        CI_REGISTRY='registry.gitlab.com/rexxy/tech-test'
+        CI_REGISTRY_HOST='registry.gitlab.com'
+        CI_GITLAB_USER='rexy-test'
+    }
+
+    agent any
+    stages {
+        stage('Checkout') {
+            steps {
+                git branch: '${BRANCH}', credentialsId: 'ssh-gitlab', url: 'git@technical-test.git'
+            }
+        }
+        stage('Push Image') {
+            steps{
+                withCredentials([string(credentialsId: 'cred-rexy', variable: 'TOKEN')]) {
+                    sh 'docker build --pull -t $CI_REGISTRY/${ENVIRONMENT}:${TAG_RELEASE} .'
+                    sh 'echo $TOKEN | docker login -u $CI_GITLAB_USER $CI_REGISTRY_HOST --password-stdin'
+                    sh 'docker push $CI_REGISTRY/${ENVIRONMENT}:${TAG_RELEASE}'
+                    sh 'docker rmi $CI_REGISTRY/${ENVIRONMENT}:${TAG_RELEASE}'
+                    sh 'docker system prune -f'
+                }
+            }
+        }
+        stage('Deploy') {
+            steps {
+                script {
+                    if (env.DEPLOY == 'yes') {
+                        dir('/var/lib/jenkins/workspace/technical-test') {
+                            withCredentials([string(credentialsId: 'cred-rexy', variable: 'TOKEN')]) {
+                                sh 'ansible-playbook -i /etc/ansible/hosts playbook.yml --extra-vars "PASSWORD=$TOKEN TAG_RELEASE=$TAG_RELEASE ENVIRONMENT=$ENVIRONMENT"'
+                            }
+                        }
+                    }else {
+                        echo 'SKIP DEPLOY'
+                    }
+                }
+            }
+        }
+    }
+}
